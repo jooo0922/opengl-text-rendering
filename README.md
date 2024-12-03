@@ -1,2 +1,5 @@
-# opengl-text-rendering
-Example code for OpenGL text rendering practice
+# OpenGL Text Rendering
+
+## Overview
+
+This project is example code for OpenGL text rendering practice.

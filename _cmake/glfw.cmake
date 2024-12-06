@@ -20,6 +20,4 @@ endif()
 
 set(glfw_INCLUDE ${glfw_SOURCE_DIR}/include)
 
-message(STATUS "${Green} GLFW Should Be Downloaded ${ColourReset}")
-
-# required modules (for ubuntu 22.04 LTS)
+message(STATUS "GLFW Should Be Downloaded")

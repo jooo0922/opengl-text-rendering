@@ -60,6 +60,25 @@ int main()
     return -1;
   }
 
+  /** rendering loop */
+  while (!glfwWindowShouldClose(window))
+  {
+    processInput(window);
+
+    // 버퍼 초기화
+    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Back 버퍼에 렌더링된 최종 이미지를 Front 버퍼에 교체 -> blinking 현상 방지
+    glfwSwapBuffers(window);
+
+    // 키보드, 마우스 입력 이벤트 발생 검사 후 등록된 콜백함수 호출 + 이벤트 발생에 따른 GLFWwindow 상태 업데이트
+    glfwPollEvents();
+  }
+
+  // GLFW 종료 및 메모리 반납
+  glfwTerminate();
+
   return 0;
 }
 

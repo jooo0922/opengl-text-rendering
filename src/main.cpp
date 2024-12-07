@@ -79,6 +79,18 @@ int main()
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+  /** Text Rendering 쉐이더 생성 및 투영행렬 계산 */
+
+  // 쉐이더 객체 생성 및 바인딩
+  Shader shader("resources/shaders/text.vs", "resources/shaders/text.fs");
+  shader.use();
+
+  // orthogonal 투영행렬 계산 및 쉐이더에 전송
+  // orthogonal 투영행렬의 left, right, top, bottom 을 아래와 같이 정의하면, vertex position 을 screen space 좌표계로 정의하여 사용할 수 있음.
+  // -> 텍스트 위치(= 2D Quad 위치)는 아무래도 screen space 좌표계로 정의하는 게 더 직관적이니까!
+  glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(SCR_WIDTH), 0.0f, static_cast<float>(SCR_HEIGHT));
+  shader.setMat4("projection", projection);
+
   /** FreeType 라이브러리 초기화 */
   FT_Library ft;
   if (FT_Init_FreeType(&ft))

@@ -36,6 +36,9 @@ struct Character
 };
 std::map<GLchar, Character> Characters;
 
+// 각 glyph 의 grayscale bitmap 을 적용할 2D Quad 의 VAO, VBO 객체 ID 변수 전역 선언 -> RenderText() 콜백함수 내에서 참조해야 하기 때문.
+unsigned int VAO, VBO;
+
 int main()
 {
   // GLFW 초기화 및 윈도우 설정 구성
@@ -166,6 +169,18 @@ int main()
   // FreeType 라이브러리 사용 완료 후 리소스 메모리 반납
   FT_Done_Face(face);
   FT_Done_FreeType(ft);
+
+  /** 2D Quad 의 VAO, VBO 객체 생성 및 설정 */
+  glGenVertexArrays(1, &VAO);
+  glGenBuffers(1, &VBO);
+  glBindVertexArray(VAO);
+  glBindBuffer(GL_ARRAY_BUFFER, VBO);
+  // 2D Quad 는 각 glyph metrices 에 따라 매 프레임마다 정점 데이터가 자주 변경되므로, GL_DYNAMIC_DRAW 모드로 정점 데이터 버퍼의 메모리를 예약함.
+  glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  glBindVertexArray(0);
 
   /** rendering loop */
   while (!glfwWindowShouldClose(window))

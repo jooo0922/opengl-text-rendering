@@ -60,6 +60,34 @@ int main()
     return -1;
   }
 
+  /** FreeType 라이브러리 초기화 */
+  FT_Library ft;
+  if (FT_Init_FreeType(&ft))
+  {
+    // FreeType 라이브러리 초기화 실패 -> FreeType 함수들은 에러 발생 시 0 이 아닌 값을 반환.
+    std::cout << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
+    return -1;
+  }
+
+  /** FT_Face 인터페이스로 .ttf 파일 로드 */
+  FT_Face face;
+  if (FT_New_Face(ft, "resources/fonts/Antonio-Bold.ttf", 0, &face))
+  {
+    // .ttf 파일 로드 실패
+    std::cout << "ERROR::FREETYPE: Failed to load font" << std::endl;
+    return -1;
+  }
+  else
+  {
+    // .ttf 파일 로드 성공 시 작업들 처리
+
+    // .ttf 파일로부터 렌더링할 glyph 들의 pixel size 설정 -> height 값만 설정하고 width 는 각 glyph 형태에 따라 동적으로 계산하도록 0 으로 지정
+    FT_Set_Pixel_Sizes(face, 0, 48);
+
+    // glyph 가 렌더링된 grayscale bitmap 의 텍스쳐 데이터 정렬 단위 변경 (하단 필기 참고)
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  }
+
   /** rendering loop */
   while (!glfwWindowShouldClose(window))
   {
@@ -99,3 +127,28 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
   glViewport(0, 0, width, height);
 }
+
+/**
+ * glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+ *
+ * GL_UNPACK_ALIGNMENT 란, GPU 가 텍스쳐 버퍼에 저장된 데이터들을 한 줄(row) 단위로 읽을 때,
+ * (-> 참고로 여기서 텍스쳐 데이터의 한 줄은 텍스쳐 width 길이만큼과 동일함.)
+ * 각 줄의 데이터를 몇 byte 단위로 정렬되도록 할 것인지 지정하는 OpenGL 상태값이라고 보면 됨.
+ *
+ * 이것의 기본값은 4인데,
+ * 그 이유는 OpenGL 에서 다루는 대부분의 텍스쳐 포맷은 GL_RGBA 이므로,
+ * 텍스쳐 버퍼 한 줄의 크기는 4 bytes(= r, g, b, a 각각 1 byte 씩) 의 배수로 맞아 떨어짐.
+ *
+ * 이렇게 되면, 텍스쳐 버퍼의 각 줄(= width)을 GPU 로 전송할 때,
+ * 데이터가 기본적으로 4 bytes 단위로 정렬된 상태라고 가정하고 데이터를 읽음.
+ * 그래서 일반적으로는 기본값을 그대로 적용해서 GPU 로 텍스쳐를 전송하면 아무런 문제가 안됨.
+ *
+ * 그러나, 이 예제에서 FreeType 라이브러리가 렌더링해주는 glyph 텍스쳐 버퍼의 포맷은
+ * GL_RED 타입의 grayscale bitmap 이므로, 텍스쳐 버퍼의 각 줄의 크기는 1 byte 의 배수로 떨어짐.
+ *
+ * 이럴 경우, GL_UNPACK_ALIGNMENT 상태값을 1로 변경해서
+ * GPU 에게 전송하려는 grayscale bitmap 데이터의 각 줄이 1 byte 단위로 정렬된 상태임을 알려야 함.
+ *
+ * 이렇게 하지 않으면 소위 Segmentation Fault 라고 하는
+ * 허용되지 않은 에모리 영역을 침범하는 memory violation 에러가 런타임에 발생할 수 있음.
+ */

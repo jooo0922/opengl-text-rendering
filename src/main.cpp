@@ -26,6 +26,16 @@ void processInput(GLFWwindow *window);
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
+/** FreeType 라이브러리로 로드한 glyph metrices(각 글꼴의 크기, 위치, baseline 등)를 파싱할 자료형 정의 */
+struct Character
+{
+  unsigned int TextureID; // FreeType 내부에서 렌더링된 각 glyph 의 텍스쳐 버퍼 ID
+  glm::ivec2 Size;        // glyph 크기
+  glm::ivec2 Bearing;     // glyph 원점에서 x축, y축 방향으로 각각 떨어진 offset
+  unsigned int Advance;   // 현재 glyph 원점에서 다음 glyph 원점까지의 거리 (1/64px 단위로 정의되어 있으므로, 값 사용 시 1px 단위로 변환해야 함.)
+};
+std::map<GLchar, Character> Characters;
+
 int main()
 {
   // GLFW 초기화 및 윈도우 설정 구성
@@ -60,6 +70,15 @@ int main()
     return -1;
   }
 
+  /** OpenGL 전역 상태 설정 */
+
+  // 2D Quad 를 2D View 로(= orthogonal 투영으로 상단에서) 렌더링할 것이므로 불필요한 은면 제거
+  glEnable(GL_CULL_FACE);
+
+  // 2D Quad 에서 glyph background 는 투명 처리하기 위해 blending mode 활성화
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
   /** FreeType 라이브러리 초기화 */
   FT_Library ft;
   if (FT_Init_FreeType(&ft))
@@ -86,7 +105,55 @@ int main()
 
     // glyph 가 렌더링된 grayscale bitmap 의 텍스쳐 데이터 정렬 단위 변경 (하단 필기 참고)
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    // 128 개의 ASCII 문자들의 glyph 들을 8-bit grayscale bitmap 텍스쳐 버퍼에 렌더링
+    for (unsigned char c = 0; c < 128; c++)
+    {
+      if (FT_Load_Char(face, c, FT_LOAD_RENDER))
+      {
+        // 각 ASCII 문자에 해당하는 glyph 로드 실패
+        std::cout << "ERROR::FREETYPE: Failed to load Glyph" << std::endl;
+        continue;
+      }
+
+      // 각 glyph grayscale bitmap 텍스쳐 생성 및 bitmap 데이터 복사
+      unsigned int texture;
+      glGenTextures(1, &texture);
+      glBindTexture(GL_TEXTURE_2D, texture);
+      glTexImage2D(
+          GL_TEXTURE_2D,
+          0,
+          GL_RED,
+          face->glyph->bitmap.width,
+          face->glyph->bitmap.rows, // bitmap 버퍼 줄 수 = bitmap 버퍼 height
+          0,
+          GL_RED,
+          GL_UNSIGNED_BYTE,
+          face->glyph->bitmap.buffer);
+
+      // 텍스쳐 파라미터 설정
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+      // 로드된 glyph metrices 를 커스텀 자료형으로 파싱
+      Character character = {
+          texture,
+          glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows),
+          glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top),
+          static_cast<unsigned int>(face->glyph->advance.x)};
+      // std::map 컨테이너는 std::pair 를 node 로 삼아 key-value 쌍을 추가함. (참고로, std::map 은 red-black tree 기반의 컨테이너)
+      Characters.insert(std::pair<char, Character>(c, character));
+    }
+
+    // 각 glyph 들의 텍스쳐 생성 완료 후 텍스쳐 바인딩 해제
+    glBindTexture(GL_TEXTURE_2D, 0);
   }
+
+  // FreeType 라이브러리 사용 완료 후 리소스 메모리 반납
+  FT_Done_Face(face);
+  FT_Done_FreeType(ft);
 
   /** rendering loop */
   while (!glfwWindowShouldClose(window))

@@ -22,6 +22,9 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 // GLFW 윈도우 키 입력 콜백함수
 void processInput(GLFWwindow *window);
 
+// 주어진 std::string 문자열을 주어진 위치, 크기, 색상으로 렌더링하는 콜백함수
+void RenderText(Shader &shader, std::string text, float x, float y, float scale, glm::vec3 color);
+
 /** 스크린 해상도 선언 */
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
@@ -191,6 +194,10 @@ int main()
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    // 주어진 std::string 컨테이너 문자열을 2D Quad 에 렌더링하는 함수 호출
+    RenderText(shader, "This is sample text", 25.0f, 25.0f, 1.0f, glm::vec3(0.5f, 0.8f, 0.2f));
+    RenderText(shader, "(C) LearnOpenGL.com", 540.0f, 570.0f, 0.5f, glm::vec3(0.3f, 0.7f, 0.9f));
+
     // Back 버퍼에 렌더링된 최종 이미지를 Front 버퍼에 교체 -> blinking 현상 방지
     glfwSwapBuffers(window);
 
@@ -220,6 +227,102 @@ void processInput(GLFWwindow *window)
 void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
   glViewport(0, 0, width, height);
+}
+
+// 주어진 std::string 문자열을 주어진 위치, 크기, 색상으로 렌더링하는 콜백함수
+void RenderText(Shader &shader, std::string text, float x, float y, float scale, glm::vec3 color)
+{
+  // 주어진 Shader 객체 바인딩 및 색상값 전송
+  shader.use();
+  shader.setVec3("textColor", color);
+
+  // grayscale bitmap 텍스쳐(glyph 텍스쳐)를 바인딩할 texture unit 활성화 및 전송
+  glActiveTexture(0);
+  // 예제코드 원본에서는 0번 texture unit(기본값) 이다보니 쉐이더 전송 코드는 생략한 것으로 보임. (but, 가독성 및 확장성을 위해 명시적으로 초기화 권장)
+  shader.setInt("text", 0);
+
+  // glyph 텍스쳐를 적용할 2D Quad 정점 데이터 VAO 객체 바인딩
+  glBindVertexArray(VAO);
+
+  /** 주어진 문자열 컨테이너 std::string 을 순회하며 각 문자에 대응되는 glyph 를 2D Quad 에 렌더링  */
+  // std::string 컨테이너를 순회하는 '읽기 전용' 이터레이터 선언
+  std::string::const_iterator c;
+  /**
+   * 읽기 전용 이터레이터 c 에는 연속 메모리 블록으로 저장되는 std::string 컨테이너 내부의
+   * 각 char 타입의 문자들이 저장된 메모리 블록 주소값이 담겨 있음.
+   *
+   * 따라서, *c (= de-referencing)을 통해 해당 메모리에 저장된 실제 char 타입 문자에 접근 가능.
+   *
+   * 이때, for 문 내에서 c++ 연산자를 사용하면 현재 가리키고 있는 메모리 주소로부터
+   * 포인터가 가리키는 데이터 타입(= char)의 크기(= 1 byte)만큼 더해서 다음 메모리 블록에 저장된
+   * char 타입 문자를 가리키는 주소값을 얻을 수 있음.
+   *
+   * -> 즉, 연속 메모리 블록 형태로 저장된 std::string 컨테이너의 각 char 타입 값을
+   * 하나씩 순차적으로 접근할 수 있도록 for 문을 구성한 것.
+   */
+  for (c = text.begin(); c != text.end(); c++)
+  {
+    // 현재 순회 중인 char 타입 문자에 대응되는 glyph metrices 를 가져옴
+    Character ch = Characters[*c];
+
+    // 현재 문자를 렌더링할 glyph 의 위치(= 2D Quad 의 좌하단 정점의 좌표값) 계산
+    /**
+     * 참고로, 로컬 변수 x, y 에는 현재 glyph 원점(origin)이 저장되어 있음.
+     * (LearnOpenGL Glyph Metrics 이미지 참고)
+     *
+     * 여기에 Bearing 값을 더해 glyph 를 원점에서 얼만큼 떨어트릴 지 결정함.
+     * 이때, g, j, p, j 처럼 glyph 일부가 baseline(즉, glyph 원점이 포함된 수평선) 하단에 내려오는 글꼴의 경우,
+     * Bearing.y 값이 Size.y 값보다 작게 계산되고,
+     *
+     * X, Z, Y 처럼 glyph 가 정확히 baseline 위에 안착하는 글꼴의 경우 Bearing.y == Size.y 로 계산되어
+     * 글꼴에 따라 glyph 위치값(= 2D Quad 의 좌하단 정점의 좌표)을 baseline 밑으로 내리도록 계산함.
+     */
+    float xpos = x + ch.Bearing.x * scale;
+    float ypos = y - (ch.Size.y - ch.Bearing.y) * scale;
+
+    // 현재 문자를 렌더링할 glyph 의 크기(= 2D Quad 의 width, height) 계산
+    float w = ch.Size.x * scale;
+    float h = ch.Size.y * scale;
+
+    // glyph 의 위치(= 2D Quad 좌하단 정점)와 크기(= 2D Quad 의 width, height)를 가지고 2D Quad 정점 데이터 계산
+    float vertices[6][4] = {
+        // position      // uv
+        {xpos, ypos + h, 0.0f, 0.0f},
+        {xpos, ypos, 0.0f, 1.0f},
+        {xpos + w, ypos, 1.0f, 1.0f},
+        {xpos, ypos + h, 0.0f, 0.0f},
+        {xpos + w, ypos, 1.0f, 1.0f},
+        {xpos + w, ypos + h, 1.0f, 0.0f},
+    };
+
+    // 2D Quad 에 적용할 grayscale bitmap 텍스쳐 버퍼 바인딩
+    glBindTexture(GL_TEXTURE_2D, ch.TextureID);
+
+    // 재계산된 2D Quad 정점 데이터를 VBO 객체에 덮어쓰기
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // 2D Quad draw call
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    /**
+     * 현재 glyph 원점에서 Advance 만큼 떨어진 다음 glyph 원점의 x 좌표값 계산
+     *
+     * 이 때, FreeType 라이브러리의 Advance 값은 1/64 px 단위로 계산되기 때문에,
+     * 이것을 1px 단위로 변환해서 사용해야 함.
+     *
+     * 이를 위해 1/2^6(= 1/64)제곱값을 구해서 Advance 에 곱할 수도 있으나,
+     * >> 6, 즉, right bit shift 연산을 6번 수행하면 1/2 를 6제곱하는 것과 동일함.
+     *
+     * 심지어, bit shift 연산이 거듭제곱보다 더 빠르기 때문에, 성능 최적화에 유리함.
+     */
+    x += (ch.Advance >> 6) * scale;
+  }
+
+  // std::string 컨테이너에 저장된 모든 문자열 렌더링 완료 후, 텍스쳐 및 VAO 객체 바인딩 해제
+  glBindVertexArray(0);
+  glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 /**

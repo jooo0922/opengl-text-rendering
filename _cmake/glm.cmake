@@ -18,4 +18,4 @@ endif()
 
 set(glm_INCLUDE ${glm_SOURCE_DIR})
 
-message(STATUS "${Green} GLM Should Be Downloaded ${ColourReset}")
+message(STATUS "GLM Should Be Downloaded")
